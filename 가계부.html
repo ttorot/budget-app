@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>가계부</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 20px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    /* 탭 */
+    .tabs {
+      background: #2c3e50;
+      display: flex;
+      padding: 0 24px;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      padding: 10px 22px;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.55);
+      font-size: 14px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover { color: rgba(255,255,255,0.85); }
+    .tab-btn.active { color: white; border-bottom-color: #f0c040; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .container {
+      max-width: 900px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    /* 요약 카드 */
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .card .label { font-size: 13px; color: #888; margin-bottom: 8px; }
+    .card .amount { font-size: 22px; font-weight: bold; }
+    .card.income .amount { color: #27ae60; }
+    .card.expense .amount { color: #e74c3c; }
+    .card.balance .amount { color: #2980b9; }
+
+    /* 입력 폼 */
+    .form-box {
+      background: white;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 24px;
+    }
+
+    .form-box h2 { font-size: 15px; margin-bottom: 14px; color: #555; }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .form-row input,
+    .form-row select {
+      flex: 1;
+      min-width: 110px;
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-row input:focus,
+    .form-row select:focus { border-color: #2c3e50; }
+
+    .form-row input[name="description"] { flex: 2; }
+
+    .btn-add {
+      padding: 9px 22px;
+      background: #2c3e50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    .btn-add:hover { background: #3d5166; }
+
+    /* 필터 */
+    .filter-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-row select,
+    .filter-row input[type="month"] {
+      padding: 7px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .filter-row .spacer { flex: 1; }
+
+    .btn-export {
+      padding: 7px 16px;
+      background: #ecf0f1;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-export:hover { background: #dfe6e9; }
+
+    /* 거래 목록 */
+    .list-box {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      overflow: hidden;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead { background: #f8f9fa; }
+    thead th {
+      padding: 12px 14px;
+      text-align: left;
+      font-weight: 600;
+      color: #666;
+      border-bottom: 1px solid #eee;
+    }
+
+    tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #fafafa; }
+    tbody td { padding: 11px 14px; }
+
+    .type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .type-income { background: #eafaf1; color: #27ae60; }
+    .type-expense { background: #fdf0f0; color: #e74c3c; }
+    .amount-income { color: #27ae60; font-weight: 600; }
+    .amount-expense { color: #e74c3c; font-weight: 600; }
+
+    .btn-del, .btn-edit {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 15px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.2s;
+    }
+
+    .btn-edit { color: #aaa; }
+    .btn-edit:hover { color: #2980b9; }
+    .btn-del { color: #ccc; }
+    .btn-del:hover { color: #e74c3c; }
+
+    .empty {
+      text-align: center;
+      color: #bbb;
+      padding: 40px;
+      font-size: 14px;
+    }
+
+    /* ── 통계 탭 ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .stats-card {
+      background: white;
+      border-radius: 12px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .stats-card h3 {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .cat-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .cat-label { font-size: 13px; width: 62px; flex-shrink: 0; color: #555; }
+
+    .bar-wrap {
+      flex: 1;
+      background: #f0f2f5;
+      border-radius: 6px;
+      height: 14px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.5s ease;
+    }
+
+    .bar-income { background: #2ecc71; }
+    .bar-expense { background: #e74c3c; }
+
+    .cat-amount { font-size: 12px; color: #888; width: 80px; text-align: right; flex-shrink: 0; }
+
+    .pie-wrap {
+      display: flex;
+      justify-content: center;
+      margin: 8px 0 16px;
+    }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .stats-full {
+      background: white;
+      border-radius: 12px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 24px;
+    }
+
+    .stats-full h3 { font-size: 14px; color: #666; margin-bottom: 16px; font-weight: 600; }
+
+    /* ── 멘토 가이드 탭 ── */
+    .mentor-hero {
+      background: linear-gradient(135deg, #b8860b 0%, #f0c040 50%, #d4a017 100%);
+      border-radius: 14px;
+      padding: 28px 28px 24px;
+      color: #3a2800;
+      margin-bottom: 22px;
+      box-shadow: 0 4px 18px rgba(180,130,0,0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mentor-hero::before {
+      content: '';
+      position: absolute;
+      top: -30px; right: -30px;
+      width: 140px; height: 140px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.12);
+    }
+
+    .mentor-hero-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .mentor-icon {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      flex-shrink: 0;
+    }
+
+    .mentor-title { font-size: 18px; font-weight: bold; }
+    .mentor-subtitle { font-size: 13px; opacity: 0.75; margin-top: 2px; }
+
+    .mentor-summary {
+      background: rgba(255,255,255,0.28);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-top: 14px;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    /* 예산 설정 */
+    .budget-box {
+      background: white;
+      border-radius: 12px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 20px;
+    }
+
+    .budget-box-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .budget-box-header h3 { font-size: 15px; font-weight: 600; color: #444; }
+
+    .budget-total-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .budget-total-row label { font-size: 13px; color: #666; width: 80px; }
+
+    .budget-total-row input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .budget-total-row input:focus { border-color: #f0c040; }
+
+    .budget-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .budget-row .cat-lbl { font-size: 13px; color: #555; width: 64px; flex-shrink: 0; }
+
+    .budget-row input {
+      flex: 1;
+      padding: 7px 11px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .budget-row input:focus { border-color: #f0c040; }
+
+    .budget-bar-wrap {
+      flex: 1.5;
+      background: #f0f2f5;
+      border-radius: 6px;
+      height: 13px;
+      overflow: hidden;
+    }
+
+    .budget-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.5s ease, background 0.3s;
+    }
+
+    .budget-status { font-size: 12px; width: 64px; text-align: right; flex-shrink: 0; }
+
+    /* 가이드 카드 */
+    .guide-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .guide-card {
+      background: white;
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      border-left: 4px solid #f0c040;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .guide-card.warning { border-left-color: #e74c3c; }
+    .guide-card.good { border-left-color: #27ae60; }
+
+    .guide-card-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+    .guide-card-title { font-size: 14px; font-weight: 600; margin-bottom: 5px; }
+    .guide-card-body { font-size: 13px; color: #666; line-height: 1.6; }
+
+    .btn-refresh-guide {
+      width: 100%;
+      padding: 11px;
+      background: linear-gradient(135deg, #b8860b, #f0c040);
+      color: #3a2800;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn-refresh-guide:hover { opacity: 0.88; }
+
+    /* 모달 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: white;
+      border-radius: 14px;
+      padding: 28px;
+      width: 480px;
+      max-width: 95vw;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+
+    .modal h2 { font-size: 16px; margin-bottom: 20px; color: #333; }
+
+    .modal-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 14px;
+    }
+
+    .modal-field label { font-size: 12px; color: #888; }
+
+    .modal-field input,
+    .modal-field select {
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .modal-field input:focus,
+    .modal-field select:focus { border-color: #2c3e50; }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .btn-cancel {
+      padding: 9px 20px;
+      background: #f0f2f5;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btn-save {
+      padding: 9px 24px;
+      background: #2c3e50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btn-save:hover { background: #3d5166; }
+
+    @media (max-width: 640px) {
+      .summary { grid-template-columns: 1fr 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      thead th:nth-child(3), tbody td:nth-child(3) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>📒 가계부</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('ledger')">내역</button>
+  <button class="tab-btn" onclick="switchTab('stats')">통계</button>
+  <button class="tab-btn" onclick="switchTab('mentor')">멘토 가이드</button>
+</div>
+
+<!-- ══════════════ 내역 탭 ══════════════ -->
+<div id="tab-ledger" class="tab-panel active">
+  <div class="container">
+    <div class="summary">
+      <div class="card income">
+        <div class="label">총 수입</div>
+        <div class="amount" id="total-income">₩0</div>
+      </div>
+      <div class="card expense">
+        <div class="label">총 지출</div>
+        <div class="amount" id="total-expense">₩0</div>
+      </div>
+      <div class="card balance">
+        <div class="label">잔액</div>
+        <div class="amount" id="total-balance">₩0</div>
+      </div>
+    </div>
+
+    <div class="form-box">
+      <h2>내역 추가</h2>
+      <div class="form-row">
+        <input type="date" id="inp-date">
+        <select id="inp-type" onchange="updateCategoryOptions('inp-category', this.value)">
+          <option value="income">수입</option>
+          <option value="expense">지출</option>
+        </select>
+        <select id="inp-category"></select>
+        <input type="text" name="description" id="inp-desc" placeholder="내용">
+        <input type="number" id="inp-amount" placeholder="금액 (원)" min="0">
+        <button class="btn-add" onclick="addEntry()">추가</button>
+      </div>
+    </div>
+
+    <div class="filter-row">
+      <input type="month" id="filter-month" onchange="renderAll()">
+      <select id="filter-type" onchange="renderAll()">
+        <option value="all">전체</option>
+        <option value="income">수입</option>
+        <option value="expense">지출</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="btn-export" onclick="exportCSV()">CSV 내보내기</button>
+    </div>
+
+    <div class="list-box">
+      <table>
+        <thead>
+          <tr>
+            <th>날짜</th>
+            <th>카테고리</th>
+            <th>내용</th>
+            <th>유형</th>
+            <th style="text-align:right">금액</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="entry-list"></tbody>
+      </table>
+      <div id="empty-msg" class="empty" style="display:none">내역이 없습니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 통계 탭 ══════════════ -->
+<div id="tab-stats" class="tab-panel">
+  <div class="container">
+    <div class="filter-row">
+      <input type="month" id="stats-month" onchange="renderStats()">
+    </div>
+
+    <div class="stats-grid">
+      <div class="stats-card">
+        <h3>📥 수입 카테고리</h3>
+        <div id="income-bars"></div>
+      </div>
+      <div class="stats-card">
+        <h3>📤 지출 카테고리</h3>
+        <div id="expense-bars"></div>
+      </div>
+    </div>
+
+    <div class="stats-full">
+      <h3>🥧 지출 비율</h3>
+      <div class="pie-wrap">
+        <canvas id="pie-canvas" width="220" height="220"></canvas>
+      </div>
+      <div class="legend" id="pie-legend"></div>
+    </div>
+
+    <div class="stats-full">
+      <h3>📅 월별 수입 vs 지출 추이 (최근 6개월)</h3>
+      <canvas id="trend-canvas" width="800" height="200" style="width:100%;height:auto"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 멘토 가이드 탭 ══════════════ -->
+<div id="tab-mentor" class="tab-panel">
+  <div class="container">
+
+    <div class="mentor-hero">
+      <div class="mentor-hero-top">
+        <div class="mentor-icon">🏆</div>
+        <div>
+          <div class="mentor-title">황금 멘토</div>
+          <div class="mentor-subtitle">당신의 소비 패턴을 분석해 최적 예산을 안내합니다</div>
+        </div>
+      </div>
+      <div class="mentor-summary" id="mentor-summary">
+        이번 달 데이터를 불러오는 중...
+      </div>
+    </div>
+
+    <div class="budget-box">
+      <div class="budget-box-header">
+        <h3>💰 월 예산 설정</h3>
+      </div>
+      <div class="budget-total-row">
+        <label>월 총 예산</label>
+        <input type="number" id="budget-total" placeholder="예: 2000000" oninput="saveBudgets(); renderMentor()">
+        <span style="font-size:13px;color:#888">원</span>
+      </div>
+      <div id="budget-cat-rows"></div>
+    </div>
+
+    <div class="guide-cards" id="guide-cards"></div>
+
+    <button class="btn-refresh-guide" onclick="renderMentor()">🔄 가이드 새로고침</button>
+
+  </div>
+</div>
+
+<!-- ══════════════ 수정 모달 ══════════════ -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h2>✏️ 내역 수정</h2>
+    <input type="hidden" id="edit-id">
+    <div class="modal-field">
+      <label>날짜</label>
+      <input type="date" id="edit-date">
+    </div>
+    <div class="modal-field">
+      <label>유형</label>
+      <select id="edit-type" onchange="updateCategoryOptions('edit-category', this.value)">
+        <option value="income">수입</option>
+        <option value="expense">지출</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>카테고리</label>
+      <select id="edit-category"></select>
+    </div>
+    <div class="modal-field">
+      <label>내용</label>
+      <input type="text" id="edit-desc" placeholder="내용">
+    </div>
+    <div class="modal-field">
+      <label>금액 (원)</label>
+      <input type="number" id="edit-amount" min="0">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-save" onclick="saveEdit()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* ══ 데이터 ══ */
+  const ENTRY_KEY = 'ggm_budget_entries';
+  const BUDGET_KEY = 'ggm_budget_settings';
+
+  let entries = JSON.parse(localStorage.getItem(ENTRY_KEY) || '[]');
+  let budgets = JSON.parse(localStorage.getItem(BUDGET_KEY) || '{}');
+
+  const INCOME_CATS  = ['급여', '용돈', '부업', '이자', '기타수입'];
+  const EXPENSE_CATS = ['식비', '교통', '쇼핑', '의료', '문화', '공과금', '통신', '교육', '저축', '기타'];
+
+  const PIE_COLORS = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
+                       '#3498db','#9b59b6','#e91e63','#00bcd4','#8bc34a'];
+
+  function save() { localStorage.setItem(ENTRY_KEY, JSON.stringify(entries)); }
+  function saveBudgets() {
+    budgets.total = parseInt(document.getElementById('budget-total').value) || 0;
+    EXPENSE_CATS.forEach(c => {
+      const el = document.getElementById('budget-' + c);
+      if (el) budgets[c] = parseInt(el.value) || 0;
+    });
+    localStorage.setItem(BUDGET_KEY, JSON.stringify(budgets));
+  }
+
+  function fmt(n) { return '₩' + Number(n).toLocaleString('ko-KR'); }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const thisMonth = today.slice(0, 7);
+
+  document.getElementById('inp-date').value = today;
+  document.getElementById('filter-month').value = thisMonth;
+  document.getElementById('stats-month').value = thisMonth;
+
+  /* ══ 카테고리 옵션 ══ */
+  function updateCategoryOptions(selectId, type) {
+    const sel = document.getElementById(selectId);
+    const cats = type === 'income' ? INCOME_CATS : EXPENSE_CATS;
+    const cur = sel.value;
+    sel.innerHTML = cats.map(c => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
+  }
+
+  updateCategoryOptions('inp-category', 'income');
+
+  /* ══ 탭 전환 ══ */
+  function switchTab(name) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+    if (name === 'stats') renderStats();
+    if (name === 'mentor') renderMentor();
+  }
+
+  /* ══ 내역 추가 ══ */
+  function addEntry() {
+    const date = document.getElementById('inp-date').value;
+    const type = document.getElementById('inp-type').value;
+    const category = document.getElementById('inp-category').value;
+    const desc = document.getElementById('inp-desc').value.trim();
+    const amount = parseInt(document.getElementById('inp-amount').value, 10);
+    if (!date || !amount || amount <= 0) { alert('날짜와 금액을 올바르게 입력하세요.'); return; }
+    entries.push({ id: Date.now(), date, type, category, desc, amount });
+    save();
+    renderAll();
+    document.getElementById('inp-desc').value = '';
+    document.getElementById('inp-amount').value = '';
+  }
+
+  /* ══ 수정 모달 ══ */
+  function openEdit(id) {
+    const e = entries.find(x => x.id === id);
+    if (!e) return;
+    document.getElementById('edit-id').value = id;
+    document.getElementById('edit-date').value = e.date;
+    document.getElementById('edit-type').value = e.type;
+    updateCategoryOptions('edit-category', e.type);
+    document.getElementById('edit-category').value = e.category;
+    document.getElementById('edit-desc').value = e.desc;
+    document.getElementById('edit-amount').value = e.amount;
+    document.getElementById('edit-modal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('edit-modal').classList.remove('open');
+  }
+
+  function saveEdit() {
+    const id = parseInt(document.getElementById('edit-id').value);
+    const idx = entries.findIndex(x => x.id === id);
+    if (idx === -1) return;
+    entries[idx] = {
+      id,
+      date: document.getElementById('edit-date').value,
+      type: document.getElementById('edit-type').value,
+      category: document.getElementById('edit-category').value,
+      desc: document.getElementById('edit-desc').value.trim(),
+      amount: parseInt(document.getElementById('edit-amount').value) || 0,
+    };
+    save();
+    closeModal();
+    renderAll();
+  }
+
+  document.getElementById('edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  /* ══ 삭제 ══ */
+  function deleteEntry(id) {
+    if (!confirm('삭제할까요?')) return;
+    entries = entries.filter(e => e.id !== id);
+    save();
+    renderAll();
+  }
+
+  /* ══ 필터 ══ */
+  function getFiltered() {
+    const month = document.getElementById('filter-month').value;
+    const typeFilter = document.getElementById('filter-type').value;
+    return entries.filter(e => {
+      return (!month || e.date.startsWith(month)) &&
+             (typeFilter === 'all' || e.type === typeFilter);
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  /* ══ 내역 렌더 ══ */
+  function renderLedger() {
+    const filtered = getFiltered();
+    const tbody = document.getElementById('entry-list');
+    const emptyMsg = document.getElementById('empty-msg');
+    const month = document.getElementById('filter-month').value;
+    const monthEntries = entries.filter(e => !month || e.date.startsWith(month));
+    const totalIncome  = monthEntries.filter(e => e.type === 'income').reduce((s,e) => s+e.amount, 0);
+    const totalExpense = monthEntries.filter(e => e.type === 'expense').reduce((s,e) => s+e.amount, 0);
+    document.getElementById('total-income').textContent  = fmt(totalIncome);
+    document.getElementById('total-expense').textContent = fmt(totalExpense);
+    document.getElementById('total-balance').textContent = fmt(totalIncome - totalExpense);
+
+    if (!filtered.length) { tbody.innerHTML = ''; emptyMsg.style.display = 'block'; return; }
+    emptyMsg.style.display = 'none';
+    tbody.innerHTML = filtered.map(e => `
+      <tr>
+        <td>${e.date}</td>
+        <td>${e.category}</td>
+        <td>${e.desc || '-'}</td>
+        <td><span class="type-badge type-${e.type}">${e.type==='income'?'수입':'지출'}</span></td>
+        <td style="text-align:right" class="amount-${e.type}">${fmt(e.amount)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn-edit" onclick="openEdit(${e.id})" title="수정">✏️</button>
+          <button class="btn-del" onclick="deleteEntry(${e.id})" title="삭제">✕</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  /* ══ 통계 렌더 ══ */
+  function renderStats() {
+    const month = document.getElementById('stats-month').value;
+    const me = entries.filter(e => !month || e.date.startsWith(month));
+
+    function catTotals(type) {
+      const cats = type === 'income' ? INCOME_CATS : EXPENSE_CATS;
+      const map = {};
+      me.filter(e => e.type === type).forEach(e => { map[e.category] = (map[e.category]||0) + e.amount; });
+      return cats.map(c => ({ cat: c, amt: map[c]||0 })).filter(x => x.amt > 0).sort((a,b) => b.amt-a.amt);
+    }
+
+    function renderBars(containerId, rows, cls) {
+      const max = Math.max(...rows.map(r => r.amt), 1);
+      const el = document.getElementById(containerId);
+      if (!rows.length) { el.innerHTML = '<div style="color:#bbb;font-size:13px;padding:8px">데이터 없음</div>'; return; }
+      el.innerHTML = rows.map(r => `
+        <div class="cat-row">
+          <div class="cat-label">${r.cat}</div>
+          <div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${Math.round(r.amt/max*100)}%"></div></div>
+          <div class="cat-amount">${fmt(r.amt)}</div>
+        </div>`).join('');
+    }
+
+    renderBars('income-bars', catTotals('income'), 'bar-income');
+
+    const expRows = catTotals('expense');
+    renderBars('expense-bars', expRows, 'bar-expense');
+
+    /* 파이 차트 */
+    drawPie(expRows);
+
+    /* 트렌드 */
+    drawTrend(month);
+  }
+
+  function drawPie(rows) {
+    const canvas = document.getElementById('pie-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 220, 220);
+    const total = rows.reduce((s,r) => s+r.amt, 0);
+    const legend = document.getElementById('pie-legend');
+    if (!total) { ctx.fillStyle='#eee'; ctx.beginPath(); ctx.arc(110,110,90,0,Math.PI*2); ctx.fill(); legend.innerHTML=''; return; }
+    let angle = -Math.PI/2;
+    rows.forEach((r, i) => {
+      const slice = (r.amt/total)*Math.PI*2;
+      ctx.beginPath();
+      ctx.moveTo(110,110);
+      ctx.arc(110,110,90,angle,angle+slice);
+      ctx.closePath();
+      ctx.fillStyle = PIE_COLORS[i % PIE_COLORS.length];
+      ctx.fill();
+      angle += slice;
+    });
+    ctx.beginPath(); ctx.arc(110,110,48,0,Math.PI*2); ctx.fillStyle='white'; ctx.fill();
+    legend.innerHTML = rows.map((r,i) => `
+      <div class="legend-item">
+        <div class="legend-dot" style="background:${PIE_COLORS[i%PIE_COLORS.length]}"></div>
+        ${r.cat} ${Math.round(r.amt/total*100)}%
+      </div>`).join('');
+  }
+
+  function drawTrend(currentMonth) {
+    const canvas = document.getElementById('trend-canvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+
+    const months = [];
+    const d = new Date(currentMonth + '-01');
+    for (let i = 5; i >= 0; i--) {
+      const m = new Date(d); m.setMonth(m.getMonth()-i);
+      months.push(m.toISOString().slice(0,7));
+    }
+
+    const incomes  = months.map(m => entries.filter(e => e.date.startsWith(m) && e.type==='income').reduce((s,e)=>s+e.amount,0));
+    const expenses = months.map(m => entries.filter(e => e.date.startsWith(m) && e.type==='expense').reduce((s,e)=>s+e.amount,0));
+    const maxVal = Math.max(...incomes, ...expenses, 1);
+
+    const pad = {l:50,r:20,t:20,b:30};
+    const gW = W - pad.l - pad.r;
+    const gH = H - pad.t - pad.b;
+    const step = gW / (months.length-1);
+
+    ctx.strokeStyle='#eee'; ctx.lineWidth=1;
+    [0,0.25,0.5,0.75,1].forEach(f => {
+      const y = pad.t + gH*(1-f);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W-pad.r, y); ctx.stroke();
+      ctx.fillStyle='#aaa'; ctx.font='11px sans-serif'; ctx.textAlign='right';
+      ctx.fillText(fmt(Math.round(maxVal*f)), pad.l-6, y+4);
+    });
+
+    function drawLine(data, color) {
+      ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.lineJoin='round';
+      ctx.beginPath();
+      data.forEach((v,i) => {
+        const x = pad.l + i*step;
+        const y = pad.t + gH*(1 - v/maxVal);
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+      data.forEach((v,i) => {
+        const x = pad.l + i*step;
+        const y = pad.t + gH*(1 - v/maxVal);
+        ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2);
+        ctx.fillStyle=color; ctx.fill();
+      });
+    }
+
+    drawLine(incomes,  '#27ae60');
+    drawLine(expenses, '#e74c3c');
+
+    ctx.fillStyle='#888'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    months.forEach((m,i) => ctx.fillText(m.slice(5)+'월', pad.l+i*step, H-8));
+
+    ctx.font='12px sans-serif'; ctx.textAlign='left';
+    ctx.fillStyle='#27ae60'; ctx.fillText('● 수입', pad.l, pad.t-4);
+    ctx.fillStyle='#e74c3c'; ctx.fillText('● 지출', pad.l+50, pad.t-4);
+  }
+
+  /* ══ 멘토 가이드 렌더 ══ */
+  function renderMentor() {
+    const month = thisMonth;
+    const me = entries.filter(e => e.date.startsWith(month));
+    const totalIncome  = me.filter(e => e.type==='income').reduce((s,e)=>s+e.amount,0);
+    const totalExpense = me.filter(e => e.type==='expense').reduce((s,e)=>s+e.amount,0);
+    const balance = totalIncome - totalExpense;
+    const savingRate = totalIncome ? Math.round(balance/totalIncome*100) : 0;
+
+    const budgetTotal = parseInt(document.getElementById('budget-total').value)||0;
+
+    document.getElementById('mentor-summary').innerHTML =
+      `이번 달 수입 <strong>${fmt(totalIncome)}</strong> · 지출 <strong>${fmt(totalExpense)}</strong> · 잔액 <strong style="color:${balance>=0?'#27ae60':'#e74c3c'}">${fmt(balance)}</strong><br>
+       저축률 <strong>${savingRate}%</strong>${budgetTotal ? ` · 예산 사용률 <strong>${totalIncome?Math.round(totalExpense/budgetTotal*100):0}%</strong>` : ''}`;
+
+    /* 카테고리별 예산 행 */
+    const catContainer = document.getElementById('budget-cat-rows');
+    catContainer.innerHTML = EXPENSE_CATS.map(c => {
+      const spent = me.filter(e => e.type==='expense' && e.category===c).reduce((s,e)=>s+e.amount,0);
+      const bgt = budgets[c]||0;
+      const pct = bgt ? Math.min(Math.round(spent/bgt*100),100) : 0;
+      const overBudget = bgt && spent > bgt;
+      const barColor = overBudget ? '#e74c3c' : pct > 75 ? '#f39c12' : '#f0c040';
+      return `
+        <div class="budget-row">
+          <div class="cat-lbl">${c}</div>
+          <input type="number" id="budget-${c}" placeholder="예산" value="${bgt||''}"
+            oninput="saveBudgets();renderMentor()" style="max-width:120px">
+          <div class="budget-bar-wrap">
+            <div class="budget-bar-fill" style="width:${pct}%;background:${barColor}"></div>
+          </div>
+          <div class="budget-status" style="color:${overBudget?'#e74c3c':pct>75?'#f39c12':'#888'}">
+            ${bgt ? `${pct}%` : fmt(spent)}
+          </div>
+        </div>`;
+    }).join('');
+
+    /* 가이드 카드 생성 */
+    const cards = [];
+
+    if (!totalIncome && !totalExpense) {
+      cards.push({ type:'', icon:'📝', title:'아직 내역이 없어요', body:'내역 탭에서 수입과 지출을 먼저 입력해 보세요.' });
+    } else {
+      if (savingRate >= 20) cards.push({ type:'good', icon:'🌟', title:'훌륭한 저축률!', body:`저축률 ${savingRate}%를 달성했어요. 이 추세를 유지하면 장기 자산 형성에 큰 도움이 됩니다.` });
+      else if (savingRate >= 10) cards.push({ type:'', icon:'💛', title:'저축률 개선 중', body:`현재 저축률 ${savingRate}%. 목표 20% 달성을 위해 지출 항목을 하나씩 점검해 보세요.` });
+      else cards.push({ type:'warning', icon:'⚠️', title:'저축률 주의', body:`저축률 ${savingRate}%로 낮은 편이에요. 고정비를 점검하고 불필요한 지출을 줄여보세요.` });
+
+      const catSpend = {};
+      EXPENSE_CATS.forEach(c => {
+        catSpend[c] = me.filter(e=>e.type==='expense'&&e.category===c).reduce((s,e)=>s+e.amount,0);
+      });
+      const topCat = Object.entries(catSpend).sort((a,b)=>b[1]-a[1])[0];
+      if (topCat && topCat[1]>0) cards.push({ type:'', icon:'🔍', title:`최대 지출: ${topCat[0]}`, body:`이번 달 ${topCat[0]}에 ${fmt(topCat[1])}를 지출했어요. 해당 카테고리 예산을 설정하면 관리가 더 쉬워집니다.` });
+
+      EXPENSE_CATS.forEach(c => {
+        const spent = catSpend[c]||0;
+        const bgt = budgets[c]||0;
+        if (bgt && spent > bgt) cards.push({ type:'warning', icon:'🔴', title:`${c} 예산 초과!`, body:`설정 예산 ${fmt(bgt)}을 ${fmt(spent-bgt)} 초과했어요. 남은 기간 ${c} 지출을 줄여보세요.` });
+        else if (bgt && spent/bgt > 0.75) cards.push({ type:'', icon:'🟡', title:`${c} 예산 75% 돌파`, body:`설정 예산의 ${Math.round(spent/bgt*100)}%를 사용했어요. 이번 달 나머지 기간 주의가 필요합니다.` });
+      });
+
+      if (budgetTotal && totalExpense > budgetTotal) cards.push({ type:'warning', icon:'🚨', title:'월 예산 초과!', body:`설정한 월 예산 ${fmt(budgetTotal)}을 초과했습니다. 긴급하지 않은 지출을 미뤄 보세요.` });
+
+      if (totalIncome) {
+        const foodPct = Math.round((catSpend['식비']||0)/totalIncome*100);
+        if (foodPct > 15) cards.push({ type:'', icon:'🍽️', title:'식비 비중 점검', body:`식비가 수입의 ${foodPct}%를 차지해요. 식비 비중 10~15%를 목표로 해 보세요.` });
+      }
+    }
+
+    document.getElementById('guide-cards').innerHTML = cards.map(c => `
+      <div class="guide-card ${c.type}">
+        <div class="guide-card-icon">${c.icon}</div>
+        <div>
+          <div class="guide-card-title">${c.title}</div>
+          <div class="guide-card-body">${c.body}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderAll() { renderLedger(); }
+
+  /* ══ CSV 내보내기 ══ */
+  function exportCSV() {
+    const filtered = getFiltered();
+    if (!filtered.length) { alert('내보낼 데이터가 없습니다.'); return; }
+    const rows = [['날짜','카테고리','내용','유형','금액']];
+    filtered.forEach(e => rows.push([e.date, e.category, e.desc, e.type==='income'?'수입':'지출', e.amount]));
+    const csv = '﻿' + rows.map(r => r.join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+    a.download = `가계부_${document.getElementById('filter-month').value||'all'}.csv`;
+    a.click();
+  }
+
+  /* ══ 저장된 예산 불러오기 ══ */
+  if (budgets.total) document.getElementById('budget-total').value = budgets.total;
+
+  renderAll();
+</script>
+</body>
+</html>
