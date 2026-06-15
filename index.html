@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>가계부</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -726,28 +727,19 @@
 </div>
 
 <script>
-  /* ══ 데이터 ══ */
-  const ENTRY_KEY = 'ggm_budget_entries';
-  const BUDGET_KEY = 'ggm_budget_settings';
+  /* ══ Supabase 초기화 ══ */
+  const sb = supabase.createClient(
+    'https://xttyvtyqpitwejbwtyhd.supabase.co',
+    'sb_publishable_pph6yTLPg0PK0-eMLjTqhw_G0lCw0T1'
+  );
 
-  let entries = JSON.parse(localStorage.getItem(ENTRY_KEY) || '[]');
-  let budgets = JSON.parse(localStorage.getItem(BUDGET_KEY) || '{}');
+  let entries = [];
+  let budgets = {};
 
   const INCOME_CATS  = ['급여', '용돈', '부업', '이자', '기타수입'];
   const EXPENSE_CATS = ['식비', '교통', '쇼핑', '의료', '문화', '공과금', '통신', '교육', '저축', '기타'];
-
-  const PIE_COLORS = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
-                       '#3498db','#9b59b6','#e91e63','#00bcd4','#8bc34a'];
-
-  function save() { localStorage.setItem(ENTRY_KEY, JSON.stringify(entries)); }
-  function saveBudgets() {
-    budgets.total = parseInt(document.getElementById('budget-total').value) || 0;
-    EXPENSE_CATS.forEach(c => {
-      const el = document.getElementById('budget-' + c);
-      if (el) budgets[c] = parseInt(el.value) || 0;
-    });
-    localStorage.setItem(BUDGET_KEY, JSON.stringify(budgets));
-  }
+  const PIE_COLORS   = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
+                        '#3498db','#9b59b6','#e91e63','#00bcd4','#8bc34a'];
 
   function fmt(n) { return '₩' + Number(n).toLocaleString('ko-KR'); }
 
@@ -765,7 +757,6 @@
     const cur = sel.value;
     sel.innerHTML = cats.map(c => `<option value="${c}" ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
   }
-
   updateCategoryOptions('inp-category', 'income');
 
   /* ══ 탭 전환 ══ */
@@ -779,15 +770,20 @@
   }
 
   /* ══ 내역 추가 ══ */
-  function addEntry() {
-    const date = document.getElementById('inp-date').value;
-    const type = document.getElementById('inp-type').value;
+  async function addEntry() {
+    const date     = document.getElementById('inp-date').value;
+    const type     = document.getElementById('inp-type').value;
     const category = document.getElementById('inp-category').value;
-    const desc = document.getElementById('inp-desc').value.trim();
-    const amount = parseInt(document.getElementById('inp-amount').value, 10);
+    const desc     = document.getElementById('inp-desc').value.trim();
+    const amount   = parseInt(document.getElementById('inp-amount').value, 10);
     if (!date || !amount || amount <= 0) { alert('날짜와 금액을 올바르게 입력하세요.'); return; }
-    entries.push({ id: Date.now(), date, type, category, desc, amount });
-    save();
+
+    const { data, error } = await sb.from('transactions')
+      .insert({ date, type, category, description: desc, amount })
+      .select().single();
+    if (error) { alert('저장 실패: ' + error.message); return; }
+
+    entries.push({ id: data.id, date, type, category, desc: data.description || '', amount });
     renderAll();
     document.getElementById('inp-desc').value = '';
     document.getElementById('inp-amount').value = '';
@@ -811,19 +807,21 @@
     document.getElementById('edit-modal').classList.remove('open');
   }
 
-  function saveEdit() {
-    const id = parseInt(document.getElementById('edit-id').value);
+  async function saveEdit() {
+    const id       = parseInt(document.getElementById('edit-id').value);
+    const date     = document.getElementById('edit-date').value;
+    const type     = document.getElementById('edit-type').value;
+    const category = document.getElementById('edit-category').value;
+    const desc     = document.getElementById('edit-desc').value.trim();
+    const amount   = parseInt(document.getElementById('edit-amount').value) || 0;
+
+    const { error } = await sb.from('transactions')
+      .update({ date, type, category, description: desc, amount })
+      .eq('id', id);
+    if (error) { alert('수정 실패: ' + error.message); return; }
+
     const idx = entries.findIndex(x => x.id === id);
-    if (idx === -1) return;
-    entries[idx] = {
-      id,
-      date: document.getElementById('edit-date').value,
-      type: document.getElementById('edit-type').value,
-      category: document.getElementById('edit-category').value,
-      desc: document.getElementById('edit-desc').value.trim(),
-      amount: parseInt(document.getElementById('edit-amount').value) || 0,
-    };
-    save();
+    if (idx !== -1) entries[idx] = { id, date, type, category, desc, amount };
     closeModal();
     renderAll();
   }
@@ -833,29 +831,42 @@
   });
 
   /* ══ 삭제 ══ */
-  function deleteEntry(id) {
+  async function deleteEntry(id) {
     if (!confirm('삭제할까요?')) return;
+    const { error } = await sb.from('transactions').delete().eq('id', id);
+    if (error) { alert('삭제 실패: ' + error.message); return; }
     entries = entries.filter(e => e.id !== id);
-    save();
     renderAll();
+  }
+
+  /* ══ 예산 저장 ══ */
+  async function saveBudgets() {
+    budgets.total = parseInt(document.getElementById('budget-total').value) || 0;
+    const categories = {};
+    EXPENSE_CATS.forEach(c => {
+      const el = document.getElementById('budget-' + c);
+      if (el) { const v = parseInt(el.value) || 0; budgets[c] = v; if (v) categories[c] = v; }
+    });
+    renderMentor();
+    await sb.from('budget_settings').upsert({ id: 1, total_budget: budgets.total, categories });
   }
 
   /* ══ 필터 ══ */
   function getFiltered() {
-    const month = document.getElementById('filter-month').value;
+    const month      = document.getElementById('filter-month').value;
     const typeFilter = document.getElementById('filter-type').value;
-    return entries.filter(e => {
-      return (!month || e.date.startsWith(month)) &&
-             (typeFilter === 'all' || e.type === typeFilter);
-    }).sort((a, b) => b.date.localeCompare(a.date));
+    return entries.filter(e =>
+      (!month || e.date.startsWith(month)) &&
+      (typeFilter === 'all' || e.type === typeFilter)
+    ).sort((a, b) => b.date.localeCompare(a.date));
   }
 
   /* ══ 내역 렌더 ══ */
   function renderLedger() {
-    const filtered = getFiltered();
-    const tbody = document.getElementById('entry-list');
-    const emptyMsg = document.getElementById('empty-msg');
-    const month = document.getElementById('filter-month').value;
+    const filtered    = getFiltered();
+    const tbody       = document.getElementById('entry-list');
+    const emptyMsg    = document.getElementById('empty-msg');
+    const month       = document.getElementById('filter-month').value;
     const monthEntries = entries.filter(e => !month || e.date.startsWith(month));
     const totalIncome  = monthEntries.filter(e => e.type === 'income').reduce((s,e) => s+e.amount, 0);
     const totalExpense = monthEntries.filter(e => e.type === 'expense').reduce((s,e) => s+e.amount, 0);
@@ -893,7 +904,7 @@
 
     function renderBars(containerId, rows, cls) {
       const max = Math.max(...rows.map(r => r.amt), 1);
-      const el = document.getElementById(containerId);
+      const el  = document.getElementById(containerId);
       if (!rows.length) { el.innerHTML = '<div style="color:#bbb;font-size:13px;padding:8px">데이터 없음</div>'; return; }
       el.innerHTML = rows.map(r => `
         <div class="cat-row">
@@ -904,29 +915,23 @@
     }
 
     renderBars('income-bars', catTotals('income'), 'bar-income');
-
     const expRows = catTotals('expense');
     renderBars('expense-bars', expRows, 'bar-expense');
-
-    /* 파이 차트 */
     drawPie(expRows);
-
-    /* 트렌드 */
     drawTrend(month);
   }
 
   function drawPie(rows) {
     const canvas = document.getElementById('pie-canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx    = canvas.getContext('2d');
     ctx.clearRect(0, 0, 220, 220);
-    const total = rows.reduce((s,r) => s+r.amt, 0);
+    const total  = rows.reduce((s,r) => s+r.amt, 0);
     const legend = document.getElementById('pie-legend');
     if (!total) { ctx.fillStyle='#eee'; ctx.beginPath(); ctx.arc(110,110,90,0,Math.PI*2); ctx.fill(); legend.innerHTML=''; return; }
     let angle = -Math.PI/2;
     rows.forEach((r, i) => {
       const slice = (r.amt/total)*Math.PI*2;
-      ctx.beginPath();
-      ctx.moveTo(110,110);
+      ctx.beginPath(); ctx.moveTo(110,110);
       ctx.arc(110,110,90,angle,angle+slice);
       ctx.closePath();
       ctx.fillStyle = PIE_COLORS[i % PIE_COLORS.length];
@@ -956,11 +961,11 @@
 
     const incomes  = months.map(m => entries.filter(e => e.date.startsWith(m) && e.type==='income').reduce((s,e)=>s+e.amount,0));
     const expenses = months.map(m => entries.filter(e => e.date.startsWith(m) && e.type==='expense').reduce((s,e)=>s+e.amount,0));
-    const maxVal = Math.max(...incomes, ...expenses, 1);
+    const maxVal   = Math.max(...incomes, ...expenses, 1);
 
     const pad = {l:50,r:20,t:20,b:30};
-    const gW = W - pad.l - pad.r;
-    const gH = H - pad.t - pad.b;
+    const gW  = W - pad.l - pad.r;
+    const gH  = H - pad.t - pad.b;
     const step = gW / (months.length-1);
 
     ctx.strokeStyle='#eee'; ctx.lineWidth=1;
@@ -975,14 +980,12 @@
       ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.lineJoin='round';
       ctx.beginPath();
       data.forEach((v,i) => {
-        const x = pad.l + i*step;
-        const y = pad.t + gH*(1 - v/maxVal);
+        const x = pad.l + i*step, y = pad.t + gH*(1 - v/maxVal);
         i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
       });
       ctx.stroke();
       data.forEach((v,i) => {
-        const x = pad.l + i*step;
-        const y = pad.t + gH*(1 - v/maxVal);
+        const x = pad.l + i*step, y = pad.t + gH*(1 - v/maxVal);
         ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2);
         ctx.fillStyle=color; ctx.fill();
       });
@@ -990,10 +993,8 @@
 
     drawLine(incomes,  '#27ae60');
     drawLine(expenses, '#e74c3c');
-
     ctx.fillStyle='#888'; ctx.font='11px sans-serif'; ctx.textAlign='center';
     months.forEach((m,i) => ctx.fillText(m.slice(5)+'월', pad.l+i*step, H-8));
-
     ctx.font='12px sans-serif'; ctx.textAlign='left';
     ctx.fillStyle='#27ae60'; ctx.fillText('● 수입', pad.l, pad.t-4);
     ctx.fillStyle='#e74c3c'; ctx.fillText('● 지출', pad.l+50, pad.t-4);
@@ -1001,32 +1002,30 @@
 
   /* ══ 멘토 가이드 렌더 ══ */
   function renderMentor() {
-    const month = thisMonth;
-    const me = entries.filter(e => e.date.startsWith(month));
+    const month        = thisMonth;
+    const me           = entries.filter(e => e.date.startsWith(month));
     const totalIncome  = me.filter(e => e.type==='income').reduce((s,e)=>s+e.amount,0);
     const totalExpense = me.filter(e => e.type==='expense').reduce((s,e)=>s+e.amount,0);
-    const balance = totalIncome - totalExpense;
-    const savingRate = totalIncome ? Math.round(balance/totalIncome*100) : 0;
-
-    const budgetTotal = parseInt(document.getElementById('budget-total').value)||0;
+    const balance      = totalIncome - totalExpense;
+    const savingRate   = totalIncome ? Math.round(balance/totalIncome*100) : 0;
+    const budgetTotal  = parseInt(document.getElementById('budget-total').value)||0;
 
     document.getElementById('mentor-summary').innerHTML =
       `이번 달 수입 <strong>${fmt(totalIncome)}</strong> · 지출 <strong>${fmt(totalExpense)}</strong> · 잔액 <strong style="color:${balance>=0?'#27ae60':'#e74c3c'}">${fmt(balance)}</strong><br>
        저축률 <strong>${savingRate}%</strong>${budgetTotal ? ` · 예산 사용률 <strong>${totalIncome?Math.round(totalExpense/budgetTotal*100):0}%</strong>` : ''}`;
 
-    /* 카테고리별 예산 행 */
     const catContainer = document.getElementById('budget-cat-rows');
     catContainer.innerHTML = EXPENSE_CATS.map(c => {
-      const spent = me.filter(e => e.type==='expense' && e.category===c).reduce((s,e)=>s+e.amount,0);
-      const bgt = budgets[c]||0;
-      const pct = bgt ? Math.min(Math.round(spent/bgt*100),100) : 0;
+      const spent      = me.filter(e => e.type==='expense' && e.category===c).reduce((s,e)=>s+e.amount,0);
+      const bgt        = budgets[c]||0;
+      const pct        = bgt ? Math.min(Math.round(spent/bgt*100),100) : 0;
       const overBudget = bgt && spent > bgt;
-      const barColor = overBudget ? '#e74c3c' : pct > 75 ? '#f39c12' : '#f0c040';
+      const barColor   = overBudget ? '#e74c3c' : pct > 75 ? '#f39c12' : '#f0c040';
       return `
         <div class="budget-row">
           <div class="cat-lbl">${c}</div>
           <input type="number" id="budget-${c}" placeholder="예산" value="${bgt||''}"
-            oninput="saveBudgets();renderMentor()" style="max-width:120px">
+            oninput="saveBudgets()" style="max-width:120px">
           <div class="budget-bar-wrap">
             <div class="budget-bar-fill" style="width:${pct}%;background:${barColor}"></div>
           </div>
@@ -1036,15 +1035,13 @@
         </div>`;
     }).join('');
 
-    /* 가이드 카드 생성 */
     const cards = [];
-
     if (!totalIncome && !totalExpense) {
       cards.push({ type:'', icon:'📝', title:'아직 내역이 없어요', body:'내역 탭에서 수입과 지출을 먼저 입력해 보세요.' });
     } else {
-      if (savingRate >= 20) cards.push({ type:'good', icon:'🌟', title:'훌륭한 저축률!', body:`저축률 ${savingRate}%를 달성했어요. 이 추세를 유지하면 장기 자산 형성에 큰 도움이 됩니다.` });
-      else if (savingRate >= 10) cards.push({ type:'', icon:'💛', title:'저축률 개선 중', body:`현재 저축률 ${savingRate}%. 목표 20% 달성을 위해 지출 항목을 하나씩 점검해 보세요.` });
-      else cards.push({ type:'warning', icon:'⚠️', title:'저축률 주의', body:`저축률 ${savingRate}%로 낮은 편이에요. 고정비를 점검하고 불필요한 지출을 줄여보세요.` });
+      if (savingRate >= 20)      cards.push({ type:'good',    icon:'🌟', title:'훌륭한 저축률!',   body:`저축률 ${savingRate}%를 달성했어요. 이 추세를 유지하면 장기 자산 형성에 큰 도움이 됩니다.` });
+      else if (savingRate >= 10) cards.push({ type:'',        icon:'💛', title:'저축률 개선 중',   body:`현재 저축률 ${savingRate}%. 목표 20% 달성을 위해 지출 항목을 하나씩 점검해 보세요.` });
+      else                       cards.push({ type:'warning', icon:'⚠️', title:'저축률 주의',      body:`저축률 ${savingRate}%로 낮은 편이에요. 고정비를 점검하고 불필요한 지출을 줄여보세요.` });
 
       const catSpend = {};
       EXPENSE_CATS.forEach(c => {
@@ -1054,14 +1051,12 @@
       if (topCat && topCat[1]>0) cards.push({ type:'', icon:'🔍', title:`최대 지출: ${topCat[0]}`, body:`이번 달 ${topCat[0]}에 ${fmt(topCat[1])}를 지출했어요. 해당 카테고리 예산을 설정하면 관리가 더 쉬워집니다.` });
 
       EXPENSE_CATS.forEach(c => {
-        const spent = catSpend[c]||0;
-        const bgt = budgets[c]||0;
-        if (bgt && spent > bgt) cards.push({ type:'warning', icon:'🔴', title:`${c} 예산 초과!`, body:`설정 예산 ${fmt(bgt)}을 ${fmt(spent-bgt)} 초과했어요. 남은 기간 ${c} 지출을 줄여보세요.` });
-        else if (bgt && spent/bgt > 0.75) cards.push({ type:'', icon:'🟡', title:`${c} 예산 75% 돌파`, body:`설정 예산의 ${Math.round(spent/bgt*100)}%를 사용했어요. 이번 달 나머지 기간 주의가 필요합니다.` });
+        const spent = catSpend[c]||0, bgt = budgets[c]||0;
+        if (bgt && spent > bgt)          cards.push({ type:'warning', icon:'🔴', title:`${c} 예산 초과!`,      body:`설정 예산 ${fmt(bgt)}을 ${fmt(spent-bgt)} 초과했어요. 남은 기간 ${c} 지출을 줄여보세요.` });
+        else if (bgt && spent/bgt > 0.75) cards.push({ type:'',        icon:'🟡', title:`${c} 예산 75% 돌파`, body:`설정 예산의 ${Math.round(spent/bgt*100)}%를 사용했어요. 이번 달 나머지 기간 주의가 필요합니다.` });
       });
 
       if (budgetTotal && totalExpense > budgetTotal) cards.push({ type:'warning', icon:'🚨', title:'월 예산 초과!', body:`설정한 월 예산 ${fmt(budgetTotal)}을 초과했습니다. 긴급하지 않은 지출을 미뤄 보세요.` });
-
       if (totalIncome) {
         const foodPct = Math.round((catSpend['식비']||0)/totalIncome*100);
         if (foodPct > 15) cards.push({ type:'', icon:'🍽️', title:'식비 비중 점검', body:`식비가 수입의 ${foodPct}%를 차지해요. 식비 비중 10~15%를 목표로 해 보세요.` });
@@ -1093,10 +1088,27 @@
     a.click();
   }
 
-  /* ══ 저장된 예산 불러오기 ══ */
-  if (budgets.total) document.getElementById('budget-total').value = budgets.total;
+  /* ══ 초기 데이터 로드 ══ */
+  async function init() {
+    const [{ data: txData }, { data: budgetData }] = await Promise.all([
+      sb.from('transactions').select('*').order('date', { ascending: false }),
+      sb.from('budget_settings').select('*').eq('id', 1).single()
+    ]);
 
-  renderAll();
+    entries = (txData || []).map(r => ({
+      id: r.id, date: r.date, type: r.type,
+      category: r.category, desc: r.description || '', amount: r.amount
+    }));
+
+    if (budgetData) {
+      budgets = { total: budgetData.total_budget || 0, ...(budgetData.categories || {}) };
+      if (budgets.total) document.getElementById('budget-total').value = budgets.total;
+    }
+
+    renderAll();
+  }
+
+  init();
 </script>
 </body>
 </html>
